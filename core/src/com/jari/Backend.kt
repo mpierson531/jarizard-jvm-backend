@@ -49,20 +49,9 @@ class Backend(@JvmField var input: FysList<String>, output: String?) {
         private inline fun isolateDirectory(dir: String): String = Paths.get(dir).name
 
         private fun cleanUp(dir: String) {
-            recursivelyDelete(Paths.get(dir))
-        }
+            // Bootstrapped!!!
 
-        private fun recursivelyDelete(dir: Path) {
-            if (Fys.isDebug)
-                Fys.logger.debug(dir)
-
-            if (Files.isDirectory(dir)) {
-                for (fsObj in Files.newDirectoryStream(dir)) {
-                    recursivelyDelete(fsObj)
-                }
-            }
-
-            Files.delete(dir)
+            FileHandler.recursivelyDelete(Paths.get(dir).toAbsolutePath())
         }
 
         private fun sanitize(dir: String): String {
