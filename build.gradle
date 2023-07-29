@@ -60,6 +60,5 @@ project(":core") {
         api "com.badlogicgames.gdx:gdx-freetype:$gdxVersion"
         api "org.jetbrains.kotlin:kotlin-stdlib:$kotlinVersion"
         implementation files("C:\\Users\\Micah\\OneDrive\\Documents\\libgdx projects\\Geo-Engine\\jar-dir\\geo-engine.jar")
-//        implementation files("C:\\Users\\Micah\\OneDrive\\Desktop\\geo-engine.jar")
     }
 }
