@@ -2,11 +2,13 @@ package com.jari
 
 import com.badlogic.gdx.graphics.Color
 import com.badlogic.gdx.graphics.g2d.BitmapFont
+import com.badlogic.gdx.graphics.g2d.TextureRegion
 import com.badlogic.gdx.scenes.scene2d.ui.Label.LabelStyle
 import com.badlogic.gdx.scenes.scene2d.ui.TextField
 import com.badlogic.gdx.scenes.scene2d.ui.TextField.TextFieldStyle
 import com.badlogic.gdx.scenes.scene2d.ui.WidgetGroup
 import com.badlogic.gdx.scenes.scene2d.utils.Drawable
+import com.badlogic.gdx.scenes.scene2d.utils.TextureRegionDrawable
 import com.badlogic.gdx.utils.Align
 import geo.ui.GLabel
 
@@ -18,10 +20,10 @@ class DirectoryWidget(font: BitmapFont, isInput: Boolean) : WidgetGroup() {
         const val labelToField = labelWidth + 30f
         const val decrement = fieldHeight + 10f
 
-        val background = Frontend.artist.textureDrawable(fieldWidth, fieldHeight, Color.DARK_GRAY, "rect", "filled")
-        val cursor = Frontend.artist.textureDrawable(2f, 5f, Color.WHITE, "rect", "filled")
-        val selection = Frontend.artist.textureDrawable(5f, 5f, Frontend.selectionColor, "rect", "filled")
-        val focusedBackground: Drawable
+        val background: TextureRegionDrawable = Frontend.artist.textureDrawable(fieldWidth, fieldHeight, Color.DARK_GRAY, "rect", "filled")
+        val cursor: TextureRegionDrawable = Frontend.artist.textureDrawable(2f, 5f, Color.WHITE, "rect", "filled")
+        val selection: TextureRegionDrawable = Frontend.artist.textureDrawable(5f, 5f, Frontend.selectionColor, "rect", "filled")
+        val focusedBackground: TextureRegionDrawable
         var y = 450f
 
         private fun decrementY() {
