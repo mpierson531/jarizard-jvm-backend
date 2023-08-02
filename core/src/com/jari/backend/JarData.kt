@@ -6,7 +6,6 @@ import com.jari.backend.errors.NaNError
 import geo.collections.FysList
 import java.io.File
 import java.nio.file.Files
-import java.nio.file.Paths
 
 class JarData internal constructor(input: Array<String>, output: String,
                                    mainClasspath: String, version: String,
@@ -35,14 +34,14 @@ class JarData internal constructor(input: Array<String>, output: String,
             return string
         }
 
-        private inline fun validate(dir: String): ErrorState {
-            return if (dir.length == 1) {
+        private inline fun validate(dir: FsObj): ErrorState {
+            return if (dir.string.length == 1) {
                 ErrorState.SingleChar
-            } else if (dir.isBlank()) {
+            } else if (dir.string.isBlank()) {
                 ErrorState.Empty
-            } else if (!dir.contains(File.separator, true)) {
+            } else if (!dir.string.contains(File.separator, true)) {
                 ErrorState.SeparatorNotPresent
-            } else if (!Files.exists(Paths.get(dir))) {
+            } else if (!Files.exists(dir.path)) {
                 ErrorState.NonExistent
             } else {
                 ErrorState.Ok
@@ -70,9 +69,9 @@ class JarData internal constructor(input: Array<String>, output: String,
 
     val isOK: Boolean
     var errors: FysList<DataError>
-    val input: Array<String>?
-    val output: String?
-    val mainClasspath: String?
+    val input: Array<FsObj>?
+    val output: FsObj?
+    val mainClasspath: FsObj?
     val version: Float?
     val useCompression: Boolean?
 
@@ -82,7 +81,12 @@ class JarData internal constructor(input: Array<String>, output: String,
 
         for (i in 0..input.size - 1) {
             input[i] = sanitize(input[i])
-            val validation = validate(input[i])
+        }
+
+        val inputObjs = Array(input.size) { FsObj(input[it]) }
+
+        for (i in 0..input.size - 1) {
+            val validation = validate(inputObjs[i])
 
             if (validation != ErrorState.Ok) {
                 isOk = false
@@ -90,12 +94,12 @@ class JarData internal constructor(input: Array<String>, output: String,
             }
         }
 
-        val output = sanitize(output)
+        val output = FsObj(sanitize(output))
         val outValidation = validate(output)
 
         if (outValidation != ErrorState.Ok && outValidation != ErrorState.NonExistent) {
             isOk = false
-            errors.add(IOError(output, outValidation, "Output Directory"))
+            errors.add(IOError(output.string, outValidation, "Output Directory"))
         }
 
         val mainClasspathChars = mainClasspath.toMutableList()
@@ -131,13 +135,13 @@ class JarData internal constructor(input: Array<String>, output: String,
             i++
         }
 
-        var mainClasspath: String? = sanitize(mainClasspathString)
+        var mainClasspath: FsObj? = FsObj(sanitize(mainClasspathString))
 
         val classValidation = validate(mainClasspath!!)
 
         if (classValidation == ErrorState.SingleChar || classValidation == ErrorState.SeparatorNotPresent) {
             isOk = false
-            errors.add(IOError(mainClasspath, classValidation, "Main Class-Path"))
+            errors.add(IOError(mainClasspath.string, classValidation, "Main Class-Path"))
             mainClasspath = null
         }
 
@@ -164,7 +168,7 @@ class JarData internal constructor(input: Array<String>, output: String,
         } else {
             this.isOK = true
             this.errors = FysList()
-            this.input = input
+            this.input = inputObjs
             this.output = output
             this.mainClasspath = mainClasspath
             this.version = version

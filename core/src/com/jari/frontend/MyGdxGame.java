@@ -1,4 +1,4 @@
-package com.jari;
+package com.jari.frontend;
 
 import com.badlogic.gdx.Game;
 

@@ -1,13 +1,11 @@
-package com.jari
+package com.jari.frontend
 
 import com.badlogic.gdx.graphics.Color
 import com.badlogic.gdx.graphics.g2d.BitmapFont
-import com.badlogic.gdx.graphics.g2d.TextureRegion
 import com.badlogic.gdx.scenes.scene2d.ui.Label.LabelStyle
 import com.badlogic.gdx.scenes.scene2d.ui.TextField
 import com.badlogic.gdx.scenes.scene2d.ui.TextField.TextFieldStyle
 import com.badlogic.gdx.scenes.scene2d.ui.WidgetGroup
-import com.badlogic.gdx.scenes.scene2d.utils.Drawable
 import com.badlogic.gdx.scenes.scene2d.utils.TextureRegionDrawable
 import com.badlogic.gdx.utils.Align
 import geo.ui.GLabel
@@ -22,7 +20,8 @@ class DirectoryWidget(font: BitmapFont, isInput: Boolean) : WidgetGroup() {
 
         val background: TextureRegionDrawable = Frontend.artist.textureDrawable(fieldWidth, fieldHeight, Color.DARK_GRAY, "rect", "filled")
         val cursor: TextureRegionDrawable = Frontend.artist.textureDrawable(2f, 5f, Color.WHITE, "rect", "filled")
-        val selection: TextureRegionDrawable = Frontend.artist.textureDrawable(5f, 5f, Frontend.selectionColor, "rect", "filled")
+        val selection: TextureRegionDrawable = Frontend.artist.textureDrawable(5f, 5f,
+            Frontend.selectionColor, "rect", "filled")
         val focusedBackground: TextureRegionDrawable
         var y = 450f
 
@@ -49,7 +48,8 @@ class DirectoryWidget(font: BitmapFont, isInput: Boolean) : WidgetGroup() {
         val labelStyle = LabelStyle(font, font.color)
         val textFieldStyle = TextFieldStyle(font, font.color, cursor, selection, background)
 
-        label = GLabel(if (isInput) "Input Directory" else "Output Directory", labelStyle, 135f, Companion.y, labelWidth, fieldHeight)
+        label = GLabel(if (isInput) "Input Directory" else "Output Directory", labelStyle, 135f,
+            Companion.y, labelWidth, fieldHeight)
         textFieldStyle.focusedBackground = focusedBackground
         field = TextField(null, textFieldStyle)
         field.alignment = Align.left
@@ -60,7 +60,7 @@ class DirectoryWidget(font: BitmapFont, isInput: Boolean) : WidgetGroup() {
         super.addActor(field)
 
         if (isInput) {
-            Companion.decrementY()
+            decrementY()
         }
     }
 

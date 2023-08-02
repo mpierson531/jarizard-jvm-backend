@@ -1,4 +1,4 @@
-package com.jari
+package com.jari.frontend
 
 import com.badlogic.gdx.Gdx
 import com.badlogic.gdx.Screen
@@ -105,8 +105,13 @@ class Frontend : Screen {
         jarButton = GTextButton("Jar", jarStyle, jarPosition, Vector2(jarBtnWidth, jarBtnHeight))
 
         val manifestStyle = LabelStyle(font, Color.WHITE)
-        val manifestLabel = GLabel("Main Class", manifestStyle, 2.5f, 35f, DirectoryWidget.labelWidth, DirectoryWidget.fieldHeight)
-        val manifestTextStyle = TextFieldStyle(copyFont(font), Color.WHITE, DirectoryWidget.cursor, DirectoryWidget.selection, DirectoryWidget.background)
+        val manifestLabel = GLabel("Main Class", manifestStyle, 2.5f, 35f,
+            DirectoryWidget.labelWidth,
+            DirectoryWidget.fieldHeight)
+        val manifestTextStyle = TextFieldStyle(copyFont(font), Color.WHITE,
+            DirectoryWidget.cursor,
+            DirectoryWidget.selection,
+            DirectoryWidget.background)
         manifestTextStyle.focusedBackground = DirectoryWidget.focusedBackground
         val manifestField = TextField(null, manifestTextStyle)
         manifestField.messageText = "Required for executable"
@@ -135,9 +140,11 @@ class Frontend : Screen {
         val versionStyle = TextFieldStyle()
         versionStyle.font = copyFont(font)
         versionStyle.fontColor = font.color
-        versionStyle.focusedBackground = artist.textureDrawable(versionWidth, DirectoryWidget.fieldHeight, selectionColor, "rect", "line")
+        versionStyle.focusedBackground = artist.textureDrawable(versionWidth,
+            DirectoryWidget.fieldHeight, selectionColor, "rect", "line")
         versionStyle.selection = DirectoryWidget.selection
-        versionStyle.background = artist.textureDrawable(versionWidth, DirectoryWidget.fieldHeight, Color.DARK_GRAY, "rect", "filled")
+        versionStyle.background = artist.textureDrawable(versionWidth,
+            DirectoryWidget.fieldHeight, Color.DARK_GRAY, "rect", "filled")
         versionStyle.cursor = DirectoryWidget.cursor
 
         val versionField = TextField("", versionStyle)
@@ -213,8 +220,6 @@ class Frontend : Screen {
         dialog.buttonTable.getCell(dialogClose).padBottom(10f)
 
         jarButton.onClick {
-//            var mainClass = manifestField.text.trim().replace('.', File.separatorChar)
-
             backend.jarIt(Array(directories.size) { directories[it].text }, outDir.text,
                 manifestField.text, versionField.text, !compressionCheckbox.isChecked)
             showDialog = true

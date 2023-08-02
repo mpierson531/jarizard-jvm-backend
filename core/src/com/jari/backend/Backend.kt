@@ -3,7 +3,6 @@ package com.jari.backend
 import com.jari.backend.errors.DataError
 import com.jari.backend.errors.IOError
 import com.jari.backend.errors.JarError
-import geo.Fys
 import geo.collections.FysList
 import geo.files.FileHandler
 import geo.threading.ThreadUtils
@@ -13,6 +12,7 @@ import java.nio.file.Path
 import java.nio.file.Paths
 import java.util.concurrent.atomic.AtomicReference
 import kotlin.io.path.name
+import kotlin.system.exitProcess
 
 class Backend {
     private var isDoneAtomic: AtomicReference<Boolean> = AtomicReference(false)
@@ -54,13 +54,10 @@ class Backend {
             }
 
             Files.write(Paths.get("$dir${File.separator}MANIFEST.txt"), fullText.toByteArray())
-
-            Files.readAllLines(Paths.get("$dir${File.separator}MANIFEST.txt")).forEach {
-                println(it)
-            }
         }
 
         private inline fun cleanUp(dir: Path) = FileHandler.recursivelyDelete(dir)
+        private inline fun makeTempDir(prefix: String) = FsObj(prefix)
     }
 
     fun jarIt(input: Array<String>, output: String, mainClass: String, version: String, useCompression: Boolean): Boolean {
@@ -85,50 +82,44 @@ class Backend {
         setRunning()
 
         ThreadUtils.run {
-            val tempDir = Files.createTempDirectory("jari-temp")
-            val tempFile = tempDir.toFile()
-            val tempString = tempDir.toString()
+            val temp = makeTempDir("jari-temp")
             val jarData = jarDataAtomic.get()
 
             val inputArgs = mutableListOf<String>()
 
-            val iter = jarData.input!!.iterator()
-
-            for (inp in iter) {
-                val inputPath = Paths.get(inp)
-                inputPath.toFile().copyRecursively(File(tempString + File.separator + inputPath.name),
+            for (inp in jarData.input!!) {
+                inp.file.copyRecursively(File(temp.string + File.separator + inp.path.name),
                     true) { _, exception -> throw exception }
-                inputArgs.add(inputPath.name)
+                inputArgs.add(inp.path.name)
             }
 
-            val mainClass = if (jarData.mainClasspath.isNullOrBlank()) null else jarData.mainClasspath
+            var mainClass = if (jarData.mainClasspath != null && jarData.mainClasspath.string.isBlank()) {
+                null
+            } else {
+                jarData.mainClasspath
+            }
 
             if (mainClass != null) {
-                val fullClasspath = tempString + File.separator + jarData.mainClasspath + ".class"
-                println("107")
+                val fullClasspath = if (mainClass.path.isAbsolute) {
+                    Paths.get(mainClass.string + ".class")
+                } else {
+                    Paths.get(temp.string + File.separator + mainClass + ".class")
+                }
 
-                if (!Files.exists(Paths.get(fullClasspath))) {
-                    println("109")
-                    jarData.errors.add(IOError("\"${jarData.mainClasspath}\"", JarData.ErrorState.NonExistent, "Main Class-Path"))
-                    cleanUp(tempDir)
+                if (!Files.exists(fullClasspath)) {
+                    jarData.errors.add(IOError("\"${fullClasspath}\"", JarData.ErrorState.NonExistent, "Main Class-Path"))
+                    cleanUp(temp.path)
                     isOkAtomic.set(false)
                     setNotRunning()
                     return
                 }
             }
 
-            println("120")
-
-            writeManifest(tempString, mainClass?.replace(File.separatorChar, '.'), jarData.version)
-            val stopwatch = geo.timing.Stopwatch()
-            stopwatch.tick()
-            val process = invokeJar(tempFile, inputArgs.toTypedArray(), jarData.output!!, jarData.useCompression!!)
+            writeManifest(temp.string, mainClass?.string?.replace(File.separatorChar, '.'), jarData.version)
+            val process = invokeJar(temp.file, inputArgs.toTypedArray(), jarData.output!!.string, jarData.useCompression!!)
             process.waitFor()
-            val time = stopwatch.tick()
 
-            Fys.logger.debug("invokeJar time: ${time.asMillis().asRaw()}")
-
-            cleanUp(tempDir)
+            cleanUp(temp.path)
 
             if (process.exitValue() != 0) {
                 var error = ""
