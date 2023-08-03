@@ -6,29 +6,78 @@ import com.jari.backend.errors.JarError
 import geo.collections.FysList
 import geo.files.FileHandler
 import geo.threading.ThreadUtils
+import geo.utils.GResult
 import java.io.File
 import java.nio.file.Files
 import java.nio.file.Path
 import java.nio.file.Paths
 import java.util.concurrent.atomic.AtomicReference
 import kotlin.io.path.name
-import kotlin.system.exitProcess
+
+fun splitDir(dir: String): Array<String> {
+    val split = ArrayList<String>()
+    var i = 0
+
+    while (i < dir.length) {
+        if (dir[i] != File.separatorChar) {
+            var string = ""
+            var j = i
+
+            while (j != dir.length && dir[j] != File.separatorChar) {
+                string += dir[j]
+                j++
+            }
+
+            split.add(string)
+            i = j + 1
+            continue
+        }
+
+        i++
+    }
+
+    return split.toTypedArray()
+}
 
 class Backend {
+    enum class ErrorState {
+        Empty,
+        SingleChar,
+        SeparatorNotPresent,
+        NonExistent,
+        Exception,
+        Ok;
+
+        override fun toString(): String {
+            return when (this) {
+                Ok -> "Input Jarred!"
+                NonExistent -> "non-existent"
+                SeparatorNotPresent -> "no file separator present"
+                SingleChar -> "single-character"
+                Empty -> "was empty"
+                Exception -> "unable to get directory"
+            }
+        }
+    }
+
     private var isDoneAtomic: AtomicReference<Boolean> = AtomicReference(false)
     private var isOkAtomic: AtomicReference<Boolean> = AtomicReference(false)
     private var isRunningAtomic: AtomicReference<Boolean> = AtomicReference(false)
     private var jarDataAtomic: AtomicReference<JarData> = AtomicReference()
 
     val isDone: Boolean get() = isDoneAtomic.get()
-    val isOk: Boolean get() = isOkAtomic.get() && jarDataAtomic.get().isOK
+    val isOk: Boolean get() = isOkAtomic.get() && jarDataAtomic.get().isOk
     val errors: FysList<DataError> get() = jarDataAtomic.get().errors
 
     companion object {
-        private inline fun invokeJar(startDirectory: File, input: Array<String>, output: String, useCompression: Boolean): Process {
+        private inline fun invokeJar(startDirectory: File, input: Array<String>, output: String, useCompression: Boolean): GResult<Process, DataError> {
             // TODO: INTRODUCE MORE ERROR HANDLING HERE
 
-            val jar = "${System.getenv("JAVA_HOME")}${File.separator}bin${File.separator}jar.exe"
+            val jar = try {
+                "${System.getenv("JAVA_HOME")}${File.separator}bin${File.separator}jar.exe"
+            } catch (e: java.lang.Exception) {
+                return GResult.err(IOError("JAVA_HOME", ErrorState.Exception, "unable to find jar executable"))
+            }
 
             val list = ArrayList<String>(input.size + 4)
 
@@ -40,10 +89,13 @@ class Backend {
 
             list.addAll(Array(input.size) { "\"${input[it]}\"" })
 
-            return ProcessBuilder(list)
-                .inheritIO()
-                .directory(startDirectory)
-                .start()
+            val processBuilder = ProcessBuilder(list).inheritIO().directory(startDirectory)
+
+            return try {
+                GResult.ok(processBuilder.start())
+            } catch (e: java.lang.Exception) {
+                GResult.err(IOError(e.cause.toString(), ErrorState.Exception, "Jar"))
+            }
         }
 
         private inline fun writeManifest(dir: String, mainClass: String?, version: Float?) {
@@ -57,24 +109,21 @@ class Backend {
         }
 
         private inline fun cleanUp(dir: Path) = FileHandler.recursivelyDelete(dir)
-        private inline fun makeTempDir(prefix: String) = FsObj(prefix)
     }
 
-    fun jarIt(input: Array<String>, output: String, mainClass: String, version: String, useCompression: Boolean): Boolean {
-        return if (isRunningAtomic.get()) {
-            false
-        } else {
-            val jarData = JarData(input, output, mainClass, version, useCompression)
-            jarDataAtomic.set(jarData)
+    fun jarIt(input: Array<String>, output: String, mainClass: String, version: String, useCompression: Boolean) {
+        if (isRunningAtomic.get()) {
+            return
+        }
 
-            if (jarData.isOK) {
-                jarIt()
-                true
-            } else {
-                isOkAtomic.set(false)
-                setNotRunning()
-                false
-            }
+        val jarData = JarData(input, output, mainClass, version, useCompression)
+        jarDataAtomic.set(jarData)
+
+        if (jarData.isOk) {
+            jarIt()
+        } else {
+            isOkAtomic.set(false)
+            setNotRunning()
         }
     }
 
@@ -82,18 +131,18 @@ class Backend {
         setRunning()
 
         ThreadUtils.run {
-            val temp = makeTempDir("jari-temp")
+            val temp = FsObj("jari-temp")
             val jarData = jarDataAtomic.get()
+            val tempRoot = temp.string + File.separator
 
             val inputArgs = mutableListOf<String>()
 
             for (inp in jarData.input!!) {
-                inp.file.copyRecursively(File(temp.string + File.separator + inp.path.name),
-                    true) { _, exception -> throw exception }
+                inp.file.copyRecursively(File(tempRoot + inp.path.name), true) { _, exception -> throw exception }
                 inputArgs.add(inp.path.name)
             }
 
-            var mainClass = if (jarData.mainClasspath != null && jarData.mainClasspath.string.isBlank()) {
+            val mainClass = if (jarData.mainClasspath != null && jarData.mainClasspath.string.isBlank()) {
                 null
             } else {
                 jarData.mainClasspath
@@ -107,7 +156,7 @@ class Backend {
                 }
 
                 if (!Files.exists(fullClasspath)) {
-                    jarData.errors.add(IOError("\"${fullClasspath}\"", JarData.ErrorState.NonExistent, "Main Class-Path"))
+                    jarData.errors.add(IOError("\"${fullClasspath}\"", ErrorState.NonExistent, "Main Class-Path"))
                     cleanUp(temp.path)
                     isOkAtomic.set(false)
                     setNotRunning()
@@ -117,23 +166,35 @@ class Backend {
 
             writeManifest(temp.string, mainClass?.string?.replace(File.separatorChar, '.'), jarData.version)
             val process = invokeJar(temp.file, inputArgs.toTypedArray(), jarData.output!!.string, jarData.useCompression!!)
-            process.waitFor()
+            var isOk = true
 
-            cleanUp(temp.path)
+            if (process.isOk) {
+                val unwrappedProcess = process.unwrap()
+                unwrappedProcess.waitFor()
 
-            if (process.exitValue() != 0) {
-                var error = ""
+                cleanUp(temp.path)
 
-                for (str in process.errorStream.bufferedReader().lines()) {
-                    error += str
+                if (unwrappedProcess.exitValue() != 0) {
+                    var error = ""
+
+                    val reader = unwrappedProcess.errorStream.bufferedReader()
+                    var line = reader.readLine()
+
+                    while (line != null) {
+                        error += line
+                        line = reader.readLine()
+                    }
+
+                    jarData.errors.add(JarError(error))
+                    isOk = false
                 }
-
-                jarData.errors.add(JarError(error))
-                isOkAtomic.set(false)
             } else {
-                isOkAtomic.set(true)
+                cleanUp(temp.path)
+                jarData.errors.add(process.unwrapErr())
+                isOk = false
             }
 
+            isOkAtomic.set(isOk)
             setNotRunning()
         }
     }

@@ -1,9 +1,11 @@
 package com.jari.backend
 
+import com.jari.backend.Backend.ErrorState
 import com.jari.backend.errors.DataError
 import com.jari.backend.errors.IOError
 import com.jari.backend.errors.NaNError
 import geo.collections.FysList
+import geo.utils.GResult
 import java.io.File
 import java.nio.file.Files
 
@@ -11,30 +13,29 @@ class JarData internal constructor(input: Array<String>, output: String,
                                    mainClasspath: String, version: String,
                                    useCompression: Boolean) {
     companion object {
-        private inline fun sanitize(dir: String): String {
-            val dir = dir.trim().split(File.separator).toMutableList()
+        private fun sanitize(dir: String): String {
+            val split = splitDir(dir)
+            var i = 0
 
+            val lastIndex = split.size - 1
             var string = ""
 
-            if (dir[dir.size - 1] == File.separator) {
-                while (dir[dir.size - 1] == File.separator) {
-                    dir.removeAt(dir.size - 1)
-                }
-            }
+            if (lastIndex >= 0) {
+                while (true) {
+                    if (i == lastIndex) {
+                        string += split[i]
+                        break
+                    }
 
-            for (i in 0..dir.size - 1) {
-                if (i == dir.size - 1) {
-                    string += dir[i]
-                    break
+                    string += split[i] + File.separator
+                    i++
                 }
-
-                string += dir[i] + File.separator
             }
 
             return string
         }
 
-        private inline fun validate(dir: FsObj): ErrorState {
+        private fun validate(dir: FsObj): ErrorState {
             return if (dir.string.length == 1) {
                 ErrorState.SingleChar
             } else if (dir.string.isBlank()) {
@@ -49,25 +50,7 @@ class JarData internal constructor(input: Array<String>, output: String,
         }
     }
 
-    enum class ErrorState {
-        Empty,
-        SingleChar,
-        SeparatorNotPresent,
-        NonExistent,
-        Ok;
-
-        override fun toString(): String {
-            return when (this) {
-                Ok -> "Input Jarred!"
-                NonExistent -> "non-existent"
-                SeparatorNotPresent -> "no file separator present"
-                SingleChar -> "single-character"
-                Empty -> "was empty"
-            }
-        }
-    }
-
-    val isOK: Boolean
+    val isOk: Boolean
     var errors: FysList<DataError>
     val input: Array<FsObj>?
     val output: FsObj?
@@ -77,38 +60,49 @@ class JarData internal constructor(input: Array<String>, output: String,
 
     init {
         var isOk = true
-        val errors = FysList<DataError>()
+        this.errors = FysList()
 
-        for (i in 0..input.size - 1) {
-            input[i] = sanitize(input[i])
+        val inputObjs: Array<GResult<FsObj, DataError>> = Array(input.size) {
+            try {
+                val sanitized = sanitize(input[it])
+                GResult.ok(FsObj(sanitized))
+            } catch (e: java.lang.Exception) {
+                GResult.err(IOError(input[it], ErrorState.Exception, "Input Directory"))
+            }
         }
 
-        val inputObjs = Array(input.size) { FsObj(input[it]) }
-
         for (i in 0..input.size - 1) {
-            val validation = validate(inputObjs[i])
+            if (inputObjs[i].isOk) {
+                val validation = validate(inputObjs[i].unwrap())
 
-            if (validation != ErrorState.Ok) {
+                if (validation != ErrorState.Ok) {
+                    isOk = false
+                    errors.add(IOError(input[i], validation, "Input Directory"))
+                }
+            } else {
                 isOk = false
-                errors.add(IOError(input[i], validation, "Input Directory"))
+                errors.add(inputObjs[i].unwrapErr())
             }
         }
 
-        val output = FsObj(sanitize(output))
-        val outValidation = validate(output)
-
-        if (outValidation != ErrorState.Ok && outValidation != ErrorState.NonExistent) {
+        val output: GResult<FsObj, DataError> = try {
+            GResult.ok(FsObj(sanitize(output)))
+        } catch (e: java.lang.Exception) {
             isOk = false
-            errors.add(IOError(output.string, outValidation, "Output Directory"))
+            GResult.err(IOError(output, ErrorState.Exception, "Output Directory"))
         }
 
-        val mainClasspathChars = mainClasspath.toMutableList()
+        if (output.isOk) {
+            val unwrapped = output.unwrap()
+            val outValidation = validate(unwrapped)
 
-        if (mainClasspathChars.isNotEmpty()) {
-            while (mainClasspathChars.isNotEmpty() && mainClasspathChars[0] == File.separatorChar || mainClasspathChars[0] == '.') {
-                mainClasspathChars.removeAt(0)
+            if (outValidation != ErrorState.Ok && outValidation != ErrorState.NonExistent) {
+                isOk = false
+                errors.add(IOError(unwrapped.string, outValidation, "Output Directory"))
             }
         }
+
+        val mainClasspathChars = sanitize(mainClasspath).toCharArray()
 
         var mainClasspathString = ""
         var i = 0
@@ -135,14 +129,20 @@ class JarData internal constructor(input: Array<String>, output: String,
             i++
         }
 
-        var mainClasspath: FsObj? = FsObj(sanitize(mainClasspathString))
+        val mainClasspath: GResult<FsObj, DataError> = try {
+            GResult.ok(FsObj(mainClasspathString))
+        } catch (e: java.lang.Exception) {
+            GResult.err(IOError(mainClasspath, ErrorState.Exception, "Main Class-Path"))
+        }
 
-        val classValidation = validate(mainClasspath!!)
+        if (mainClasspath.isOk) {
+            val unwrapped = mainClasspath.unwrap()
+            val classValidation = validate(unwrapped)
 
-        if (classValidation == ErrorState.SingleChar || classValidation == ErrorState.SeparatorNotPresent) {
-            isOk = false
-            errors.add(IOError(mainClasspath.string, classValidation, "Main Class-Path"))
-            mainClasspath = null
+            if (classValidation == ErrorState.SingleChar || classValidation == ErrorState.SeparatorNotPresent) {
+                isOk = false
+                errors.add(IOError(unwrapped.string, classValidation, "Main Class-Path"))
+            }
         }
 
         val trimmedVersion = version.trim()
@@ -153,44 +153,42 @@ class JarData internal constructor(input: Array<String>, output: String,
             trimmedVersion.toFloat()
         } catch (e: NumberFormatException) {
             isOk = false
-            errors.add(NaNError(trimmedVersion, true))
-            null
+            errors.add(NaNError(version, true))
+            1.0f
         }
 
-        if (!isOk) {
-            this.isOK = false
-            this.errors = errors
+        this.version = version
+        this.useCompression = useCompression
+
+        if (isOk) {
+            this.isOk = true
+            this.input = Array(inputObjs.size) { inputObjs[it].unwrap() }
+            this.output = output.unwrap()
+            this.mainClasspath = mainClasspath.unwrap()
+        } else {
+            this.isOk = false
             this.input = null
             this.output = null
             this.mainClasspath = null
-            this.version = null
-            this.useCompression = null
-        } else {
-            this.isOK = true
-            this.errors = FysList()
-            this.input = inputObjs
-            this.output = output
-            this.mainClasspath = mainClasspath
-            this.version = version
-            this.useCompression = useCompression
         }
     }
 
     override fun toString(): String {
-        var string = "input: ${System.lineSeparator()}"
+        val string = if (input != null) {
+            if (input.isEmpty()) {
+                "empty${System.lineSeparator()}"
+            } else {
+                val lastIndex = input.size - 1
+                var string = ""
 
-        if (input != null) {
-            val lastIndex = input.size - 1
-
-            for (i in 0..lastIndex) {
-                string += if (i == lastIndex) {
-                    "${input[i]}${System.lineSeparator()}"
-                } else {
-                    "${input[i]}, "
+                for (i in 0..lastIndex) {
+                    string += input[i].toString() + System.lineSeparator()
                 }
+
+                string
             }
         } else {
-            string += "null${System.lineSeparator()}"
+            "null${System.lineSeparator()}"
         }
 
         return string +

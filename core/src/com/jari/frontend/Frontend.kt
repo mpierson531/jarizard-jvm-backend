@@ -105,14 +105,17 @@ class Frontend : Screen {
         jarButton = GTextButton("Jar", jarStyle, jarPosition, Vector2(jarBtnWidth, jarBtnHeight))
 
         val manifestStyle = LabelStyle(font, Color.WHITE)
+
         val manifestLabel = GLabel("Main Class", manifestStyle, 2.5f, 35f,
             DirectoryWidget.labelWidth,
             DirectoryWidget.fieldHeight)
+
         val manifestTextStyle = TextFieldStyle(copyFont(font), Color.WHITE,
             DirectoryWidget.cursor,
             DirectoryWidget.selection,
             DirectoryWidget.background)
         manifestTextStyle.focusedBackground = DirectoryWidget.focusedBackground
+
         val manifestField = TextField(null, manifestTextStyle)
         manifestField.messageText = "Required for executable"
         manifestField.alignment = Align.center
@@ -204,7 +207,7 @@ class Frontend : Screen {
 
         val labelStyle = LabelStyle()
         labelStyle.font = font
-        labelStyle.fontColor = Color.WHITE
+        labelStyle.fontColor = font.color
 
         dialogLabel = GLabel("", labelStyle)
         dialog.text(dialogLabel)
@@ -257,6 +260,7 @@ class Frontend : Screen {
                     }
 
                     dialogLabel.setText(text)
+                    backend.clear()
                 }
             } else {
                 dialogLabel.setText("Jarring...")
