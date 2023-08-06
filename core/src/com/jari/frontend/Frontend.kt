@@ -18,6 +18,8 @@ import com.badlogic.gdx.scenes.scene2d.ui.Label.LabelStyle
 import com.badlogic.gdx.scenes.scene2d.ui.TextButton.TextButtonStyle
 import com.badlogic.gdx.scenes.scene2d.ui.TextField
 import com.badlogic.gdx.scenes.scene2d.ui.TextField.TextFieldStyle
+import com.badlogic.gdx.scenes.scene2d.ui.TextTooltip
+import com.badlogic.gdx.scenes.scene2d.ui.TextTooltip.TextTooltipStyle
 import com.badlogic.gdx.scenes.scene2d.ui.Window.WindowStyle
 import com.badlogic.gdx.scenes.scene2d.utils.Drawable
 import com.badlogic.gdx.scenes.scene2d.utils.TextureRegionDrawable
@@ -34,9 +36,8 @@ import geo.utils.Utils
 class Frontend : Screen {
     companion object {
         val artist: Artist2D = Artist2D()
-//        val selectionColor = Color(0.35f, 0.35f, 1f, 0.6f)
-
-          val selectionColor = Color(0.35f, 0.35f, 1f, 0.6f)
+        val selectionColor = Color(0.35f, 0.35f, 1f, 0.6f)
+        private val dependencySpacing = Utils.getWidth() / 2f - 85f
         private fun copyFont(font: BitmapFont) = BitmapFont(font.data, font.regions, true)
     }
 
@@ -47,12 +48,16 @@ class Frontend : Screen {
     private var showDialog = false
     private var isDialogActive = false
 
+    private var isOnMain = true
+    private var hasSwitchedMaven = false
+
     private val stage: Stage
 
     private val windowColor = Color(0.2f, 0.2f, 0.2f, 1f)
     private val backend: Backend = Backend()
 
     private val directories: FysList<DirectoryWidget> = FysList()
+    private val dependencies: FysList<Pair<DirectoryWidget, TextField>> = FysList()
 
     init {
 //        val clickColor = Color(selectionColor.r, selectionColor.g, selectionColor.b, 0.7f)
@@ -72,6 +77,7 @@ class Frontend : Screen {
         val jarBtnHeight = DirectoryWidget.fieldHeight
         val checkboxSize = DirectoryWidget.fieldHeight
         val addSize = DirectoryWidget.fieldHeight
+        val versionWidth = 75f
 
         val jarStyle = TextButtonStyle()
         jarStyle.font = copyFont(font)
@@ -89,16 +95,18 @@ class Frontend : Screen {
             generator.generateFont(params)
         )
 
+        generator.dispose()
+
         addStyle.over = artist.textureDrawable(addSize, addSize, Color(selectionColor), "rect", "filled")
         addStyle.pressedOffsetY = jarStyle.pressedOffsetY
 
-        generator.dispose()
-
         stage = Stage(ScreenViewport())
 
-        val inDir = DirectoryWidget(font, true)
+        val inDir = DirectoryWidget("Input Directory", font, false)
         directories.add(inDir)
-        val outDir = DirectoryWidget(font, false)
+        val outDir = DirectoryWidget("Output Directory", font, false)
+        DirectoryWidget.incrementY(false)
+
         val addDirButton = GTextButton("+", addStyle, inDir.x + Utils.getWidth() / 2f - 2f, inDir.y, addSize, addSize)
         val subDirButton = GTextButton("-", addStyle, addDirButton.x + addDirButton.width + 17f, addDirButton.y, addDirButton.width, addDirButton.height)
         val jarPosition = Vector2(subDirButton.x + addSize + 17f , inDir.y)
@@ -124,38 +132,36 @@ class Frontend : Screen {
         manifestField.setSize(DirectoryWidget.fieldWidth, DirectoryWidget.fieldHeight)
 
         addDirButton.onClick {
-            val dirWidget = DirectoryWidget(font, true)
-            stage.addActor(dirWidget)
-            directories.add(dirWidget)
-            outDir.y -= DirectoryWidget.decrement
-        }
-
-        subDirButton.onClick {
-            if (directories.size != 1) {
-                val widget = directories.remove(directories.size - 1)
-                widget.addAction(Actions.removeActor())
-                outDir.y += DirectoryWidget.decrement
-                DirectoryWidget.incrementY()
+            if (isOnMain) {
+                val dirWidget = DirectoryWidget("Input Directory", font, false)
+                stage.addActor(dirWidget)
+                directories.add(dirWidget)
+                outDir.y = DirectoryWidget.dirY
+            } else {
+                val dirWidget = DirectoryWidget("Path", font, true)
+                val versionField = makeVersionField(dirWidget.x + dependencySpacing, dirWidget.y, versionWidth, DirectoryWidget.fieldHeight, font)
+                stage.addActor(dirWidget)
+                stage.addActor(versionField)
+                dependencies.add(Pair(dirWidget, versionField))
             }
         }
 
-        val versionWidth = 75f
-        val versionStyle = TextFieldStyle()
-        versionStyle.font = copyFont(font)
-        versionStyle.fontColor = font.color
-        versionStyle.focusedBackground = artist.textureDrawable(versionWidth,
-            DirectoryWidget.fieldHeight, selectionColor, "rect", "line")
-        versionStyle.selection = DirectoryWidget.selection
-        versionStyle.background = artist.textureDrawable(versionWidth,
-            DirectoryWidget.fieldHeight, Color.DARK_GRAY, "rect", "filled")
-        versionStyle.cursor = DirectoryWidget.cursor
+        subDirButton.onClick {
+            if (isOnMain) {
+                if (directories.size != 1) {
+                    directories.remove(directories.size - 1).addAction(Actions.removeActor())
+                    DirectoryWidget.incrementY(false)
+                    outDir.y = DirectoryWidget.dirY
+                }
+            } else if (dependencies.size != 1) {
+                val dependency = dependencies.remove(dependencies.size - 1)
+                dependency.first.addAction(Actions.removeActor())
+                dependency.second.addAction(Actions.removeActor())
+                DirectoryWidget.incrementY(true)
+            }
+        }
 
-        val versionField = TextField("", versionStyle)
-        versionField.messageText = "Version"
-        versionField.alignment = Align.center
-        versionField.x = manifestField.x + manifestField.width + 15f
-        versionField.y = manifestField.y
-        versionField.setSize(versionWidth, DirectoryWidget.fieldHeight)
+        val jarVersion = makeVersionField(manifestField.x + manifestField.width + 15f, manifestField.y, versionWidth, DirectoryWidget.fieldHeight, font)
 
         val compressionLabel = GLabel("No Compress", manifestStyle)
 
@@ -182,16 +188,135 @@ class Frontend : Screen {
         compressionCheckbox.y = compressionLabel.y
         compressionCheckbox.setSize(checkboxSize, checkboxSize)
 
+        val mainButtonStyle = TextButtonStyle()
+        mainButtonStyle.over = artist.textureDrawable(5f, 5f, windowColor, "rect", "filled")
+        mainButtonStyle.up = mainButtonStyle.over
+        mainButtonStyle.font = copyFont(font)
+        mainButtonStyle.fontColor = Color(0.3f, 0.3f, 0.3f, 1f)
+        mainButtonStyle.checkedFontColor = mainButtonStyle.font.color
+        mainButtonStyle.overFontColor = Color(0.5f, 0.5f, 0.5f, 1f)
+
+        val mainButton = GTextButton("Main", mainButtonStyle)
+        mainButton.size = Vector2(jarButton.size)
+        mainButton.position = Vector2(Utils.getWidth() / 2f - jarBtnWidth, Utils.getHeight() - jarBtnHeight)
+        mainButton.setProgrammaticChangeEvents(true)
+        mainButton.toggle()
+
+        val mavenButtonStyle = TextButtonStyle()
+        mavenButtonStyle.over = mainButtonStyle.over
+        mavenButtonStyle.up = mainButtonStyle.over
+        mavenButtonStyle.font = copyFont(font)
+        mavenButtonStyle.fontColor = Color(0.3f, 0.3f, 0.3f, 1f)
+        mavenButtonStyle.checkedFontColor = mavenButtonStyle.font.color
+        mavenButtonStyle.overFontColor = Color(0.5f, 0.5f, 0.5f, 1f)
+
+        val mavenButton = GTextButton("Maven", mavenButtonStyle)
+        mavenButton.size = Vector2(mainButton.size)
+        mavenButton.position = Vector2(mainButton.x + mainButton.width, mainButton.y)
+
+        val firstDependency = DirectoryWidget("Path", font, true)
+        firstDependency.isEnabled = false
+        firstDependency.isVisible = false
+        val firstDependencyVersion = makeVersionField(firstDependency.x + dependencySpacing, firstDependency.y,
+            versionWidth, DirectoryWidget.fieldHeight, font)
+        firstDependencyVersion.isVisible = false
+        firstDependencyVersion.isDisabled = true
+        dependencies.add(Pair(firstDependency, firstDependencyVersion))
+
+        val exampleLabel = GLabel("example path: org.jetbrains.kotlin.kotlin-stdlib", manifestStyle)
+        exampleLabel.x = firstDependency.x + 90f
+        exampleLabel.y = firstDependency.y + 80f
+        exampleLabel.isVisible = false
+
+        mainButton.onClick {
+            if (!isOnMain) {
+                mavenButton.toggle()
+                isOnMain = true
+
+                exampleLabel.isVisible = false
+
+                compressionLabel.isVisible = true
+                compressionCheckbox.isVisible = true
+                compressionCheckbox.isDisabled = false
+
+                manifestLabel.isVisible = true
+                manifestField.isVisible = true
+                manifestField.isDisabled = false
+
+                jarVersion.isVisible = true
+                jarVersion.isDisabled = false
+
+                outDir.isEnabled = true
+                outDir.isVisible = true
+
+                for (dir in directories) {
+                    dir.isEnabled = true
+                    dir.isVisible = true
+                }
+
+                for (dep in dependencies) {
+                    dep.first.isEnabled = false
+                    dep.first.isVisible = false
+                    dep.second.isVisible = false
+                    dep.second.isDisabled = true
+                }
+            }
+        }
+
+        mavenButton.onClick {
+            if (isOnMain) {
+                mainButton.toggle()
+                isOnMain = false
+
+                exampleLabel.isVisible = true
+
+                compressionLabel.isVisible = false
+                compressionCheckbox.isVisible = false
+                compressionCheckbox.isDisabled = true
+
+                manifestLabel.isVisible = false
+                manifestField.isVisible = false
+                manifestField.isDisabled = true
+
+                jarVersion.isVisible = false
+                jarVersion.isDisabled = true
+
+                outDir.isEnabled = false
+                outDir.isVisible = false
+
+                for (dir in directories) {
+                    dir.isEnabled = false
+                    dir.isVisible = false
+                }
+
+                for (dep in dependencies) {
+                    dep.first.isEnabled = true
+                    dep.first.isVisible = true
+                    dep.second.isVisible = true
+                    dep.second.isDisabled = false
+                }
+            }
+        }
+
         stage.addActor(inDir)
         stage.addActor(outDir)
+
         stage.addActor(jarButton)
         stage.addActor(addDirButton)
         stage.addActor(subDirButton)
+
         stage.addActor(manifestLabel)
         stage.addActor(manifestField)
-        stage.addActor(versionField)
+        stage.addActor(jarVersion)
+
         stage.addActor(compressionLabel)
         stage.addActor(compressionCheckbox)
+
+        stage.addActor(mainButton)
+        stage.addActor(mavenButton)
+        stage.addActor(firstDependency)
+        stage.addActor(firstDependencyVersion)
+        stage.addActor(exampleLabel)
 
         val dialogColor = Color(0.3f, 0.3f, 0.3f, 0.85f)
 
@@ -223,8 +348,10 @@ class Frontend : Screen {
         dialog.buttonTable.getCell(dialogClose).padBottom(10f)
 
         jarButton.onClick {
-            backend.jarIt(Array(directories.size) { directories[it].text }, outDir.text,
-                manifestField.text, versionField.text, !compressionCheckbox.isChecked)
+            val inputDirs = Array(directories.size) { directories[it].field.text }
+            val dependencies = Array(dependencies.size) { Pair(dependencies[it].first.field.text, dependencies[it].second.text) }
+
+            backend.jarIt(inputDirs, outDir.field.text, dependencies, manifestField.text, jarVersion.text, !compressionCheckbox.isChecked)
             showDialog = true
         }
 
@@ -272,21 +399,6 @@ class Frontend : Screen {
             }
         }
 
-        /*if (showDialog && !isDialogActive) {
-            if (backend.isDone) {
-                when (backend.endState) {
-                    Backend.State.Ok -> dialogLabel.setText("Input jarred!")
-                    Backend.State.Empty -> dialogLabel.setText("Input was empty.")
-                    Backend.State.NonExistent -> dialogLabel.setText("Input didn't exist.")
-                }
-            } else {
-                dialogLabel.setText("Queued...")
-            }
-
-            dialog.show(stage)
-            isDialogActive = true
-        }*/
-
         stage.act(delta)
         stage.draw()
     }
@@ -320,6 +432,27 @@ class Frontend : Screen {
         return arrayOf(unchecked, checked, hoverOn, hoverOff)
     }
 
+    private inline fun makeVersionField(x: Float, y: Float, width: Float, height: Float, font: BitmapFont): TextField {
+        val versionStyle = TextFieldStyle()
+        versionStyle.font = copyFont(font)
+        versionStyle.fontColor = font.color
+        versionStyle.focusedBackground = artist.textureDrawable(width,
+            DirectoryWidget.fieldHeight, selectionColor, "rect", "line")
+        versionStyle.selection = DirectoryWidget.selection
+        versionStyle.background = artist.textureDrawable(width,
+            DirectoryWidget.fieldHeight, Color.DARK_GRAY, "rect", "filled")
+        versionStyle.cursor = DirectoryWidget.cursor
+
+        val versionField = TextField("", versionStyle)
+        versionField.messageText = "Version"
+        versionField.alignment = Align.center
+        versionField.x = x
+        versionField.y = y
+        versionField.setSize(width, height)
+
+        return versionField
+    }
+
     override fun show() {
 
     }
@@ -344,5 +477,4 @@ class Frontend : Screen {
     override fun dispose() {
 
     }
-
 }

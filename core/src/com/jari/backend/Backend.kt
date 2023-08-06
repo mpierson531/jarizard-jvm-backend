@@ -3,7 +3,6 @@ package com.jari.backend
 import com.jari.backend.errors.DataError
 import com.jari.backend.errors.IOError
 import com.jari.backend.errors.JarError
-import geo.collections.FysList
 import geo.files.FileHandler
 import geo.threading.ThreadUtils
 import geo.utils.GResult
@@ -14,23 +13,21 @@ import java.nio.file.Paths
 import java.util.concurrent.atomic.AtomicReference
 import kotlin.io.path.name
 
-fun splitDir(dir: String): Array<String> {
-    val split = ArrayList<String>()
+fun splitDir(dir: String, isDependency: Boolean): Array<String> {
     var i = 0
+    val separator = if (isDependency) '.' else File.separatorChar
+    val split = ArrayList<String>()
 
     while (i < dir.length) {
-        if (dir[i] != File.separatorChar) {
+        if (dir[i] != separator) {
             var string = ""
-            var j = i
 
-            while (j != dir.length && dir[j] != File.separatorChar) {
-                string += dir[j]
-                j++
+            while (i != dir.length && dir[i] != separator) {
+                string += dir[i]
+                i++
             }
 
             split.add(string)
-            i = j + 1
-            continue
         }
 
         i++
@@ -64,10 +61,11 @@ class Backend {
     private var isOkAtomic: AtomicReference<Boolean> = AtomicReference(false)
     private var isRunningAtomic: AtomicReference<Boolean> = AtomicReference(false)
     private var jarDataAtomic: AtomicReference<JarData> = AtomicReference()
+    private var errorsAtomic: AtomicReference<MutableList<DataError>> = AtomicReference(ArrayList())
 
     val isDone: Boolean get() = isDoneAtomic.get()
     val isOk: Boolean get() = isOkAtomic.get() && jarDataAtomic.get().isOk
-    val errors: FysList<DataError> get() = jarDataAtomic.get().errors
+    val errors: MutableList<DataError> get() = errorsAtomic.get()
 
     companion object {
         private inline fun invokeJar(startDirectory: File, input: Array<String>, output: String, useCompression: Boolean): GResult<Process, DataError> {
@@ -94,7 +92,7 @@ class Backend {
             return try {
                 GResult.ok(processBuilder.start())
             } catch (e: java.lang.Exception) {
-                GResult.err(IOError(e.cause.toString(), ErrorState.Exception, "Jar"))
+                GResult.err(IOError(e.message, ErrorState.Exception, "Jar"))
             }
         }
 
@@ -111,17 +109,18 @@ class Backend {
         private inline fun cleanUp(dir: Path) = FileHandler.recursivelyDelete(dir)
     }
 
-    fun jarIt(input: Array<String>, output: String, mainClass: String, version: String, useCompression: Boolean) {
+    fun jarIt(input: Array<String>, output: String, depedencies: Array<Pair<String, String>>, mainClass: String, version: String, useCompression: Boolean) {
         if (isRunningAtomic.get()) {
             return
         }
 
-        val jarData = JarData(input, output, mainClass, version, useCompression)
-        jarDataAtomic.set(jarData)
+        val jarData = JarData(input, output, depedencies, mainClass, version, useCompression)
 
         if (jarData.isOk) {
+            jarDataAtomic.set(jarData)
             jarIt()
         } else {
+            errorsAtomic.get().addAll(jarData.errors)
             isOkAtomic.set(false)
             setNotRunning()
         }
@@ -131,9 +130,10 @@ class Backend {
         setRunning()
 
         ThreadUtils.run {
-            val temp = FsObj("jari-temp")
+            val temp = FsObj.getTemp()
             val jarData = jarDataAtomic.get()
             val tempRoot = temp.string + File.separator
+            var isOk = true
 
             val inputArgs = mutableListOf<String>()
 
@@ -156,44 +156,65 @@ class Backend {
                 }
 
                 if (!Files.exists(fullClasspath)) {
-                    jarData.errors.add(IOError("\"${fullClasspath}\"", ErrorState.NonExistent, "Main Class-Path"))
+                    errorsAtomic.get().add(IOError("\"${fullClasspath}\"", ErrorState.NonExistent, "Main Class-Path"))
                     cleanUp(temp.path)
-                    isOkAtomic.set(false)
-                    setNotRunning()
-                    return
-                }
-            }
-
-            writeManifest(temp.string, mainClass?.string?.replace(File.separatorChar, '.'), jarData.version)
-            val process = invokeJar(temp.file, inputArgs.toTypedArray(), jarData.output!!.string, jarData.useCompression!!)
-            var isOk = true
-
-            if (process.isOk) {
-                val unwrappedProcess = process.unwrap()
-                unwrappedProcess.waitFor()
-
-                cleanUp(temp.path)
-
-                if (unwrappedProcess.exitValue() != 0) {
-                    var error = ""
-
-                    val reader = unwrappedProcess.errorStream.bufferedReader()
-                    var line = reader.readLine()
-
-                    while (line != null) {
-                        error += line
-                        line = reader.readLine()
-                    }
-
-                    jarData.errors.add(JarError(error))
                     isOk = false
                 }
-            } else {
-                cleanUp(temp.path)
-                jarData.errors.add(process.unwrapErr())
-                isOk = false
             }
 
+            for (dependency in jarData.dependencies) {
+                try {
+                    val result = dependency.getStream()
+
+                    if (result.isOk) {
+                        val fileObj = FsObj("${temp.string}${File.separator}${dependency.name}-${dependency.version}.jar")
+
+                        println("Dependency Name: ${dependency.name}")
+                        println("FsObj Name: ${fileObj.path.name}")
+
+                        fileObj.file.createNewFile()
+                        fileObj.file.writeBytes(dependency.getBytes())
+                        inputArgs.add(fileObj.path.name)
+                    } else {
+                        isOk = false
+                        errorsAtomic.get().add(IOError(result.unwrapErr().toString(), ErrorState.Exception, "Error"))
+                    }
+                } catch (e: java.lang.Exception) {
+                    isOk = false
+                    errorsAtomic.get().add(IOError(e.message, ErrorState.Exception, "Error"))
+                }
+            }
+
+            if (isOk) {
+                writeManifest(temp.string, mainClass?.string?.replace(File.separatorChar, '.'), jarData.version)
+                val process =
+                    invokeJar(temp.file, inputArgs.toTypedArray(), jarData.output!!.string, jarData.useCompression!!)
+
+                if (process.isOk) {
+                    val unwrappedProcess = process.unwrap()
+                    unwrappedProcess.waitFor()
+
+                    if (unwrappedProcess.exitValue() != 0) {
+                        var error = ""
+
+                        val reader = unwrappedProcess.errorStream.bufferedReader()
+                        var line = reader.readLine()
+
+                        while (line != null) {
+                            error += line
+                            line = reader.readLine()
+                        }
+
+                        jarData.errors.add(JarError(error))
+                        isOk = false
+                    }
+                } else {
+                    errorsAtomic.get().add(process.unwrapErr())
+                    isOk = false
+                }
+            }
+
+            cleanUp(temp.path)
             isOkAtomic.set(isOk)
             setNotRunning()
         }

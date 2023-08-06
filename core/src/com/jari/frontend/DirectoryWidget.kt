@@ -10,7 +10,7 @@ import com.badlogic.gdx.scenes.scene2d.utils.TextureRegionDrawable
 import com.badlogic.gdx.utils.Align
 import geo.ui.GLabel
 
-class DirectoryWidget(font: BitmapFont, isInput: Boolean) : WidgetGroup() {
+open class DirectoryWidget(text: String, font: BitmapFont, isDependency: Boolean) : WidgetGroup() {
     companion object {
         const val fieldWidth = 250f
         const val fieldHeight = 30f
@@ -23,14 +23,29 @@ class DirectoryWidget(font: BitmapFont, isInput: Boolean) : WidgetGroup() {
         val selection: TextureRegionDrawable = Frontend.artist.textureDrawable(5f, 5f,
             Frontend.selectionColor, "rect", "filled")
         val focusedBackground: TextureRegionDrawable
-        var y = 450f
 
-        private fun decrementY() {
-            y -= decrement
+        var dirY = 450f
+            private set
+        var depY = 450f
+            private set
+
+        fun incrementY(isDependency: Boolean) = incrementY(isDependency, 1)
+        fun decrementY(isDependency: Boolean) = decrementY(isDependency, 1)
+
+        fun incrementY(isDependency: Boolean, times: Int) {
+            if (isDependency) {
+                depY += decrement * times
+            } else {
+                dirY += decrement * times
+            }
         }
 
-        fun incrementY() {
-            y += decrement
+        fun decrementY(isDependency: Boolean, times: Int) {
+            if (isDependency) {
+                depY -= decrement * times
+            } else {
+                dirY -= decrement * times
+            }
         }
 
         init {
@@ -39,29 +54,41 @@ class DirectoryWidget(font: BitmapFont, isInput: Boolean) : WidgetGroup() {
         }
     }
 
-    private val label: GLabel
-    private val field: TextField
+    val label: GLabel
+    val field: TextField
 
-    val text: String get() = this.field.text
+    var isEnabled: Boolean = true
+        set(value) {
+            field = value
+            this.field.isDisabled = !value
+        }
 
     init {
+        val y: Float
+        val labelToField: Float
+
+        if (isDependency) {
+            y = depY
+            labelToField = Companion.labelToField - 75f
+            decrementY(true)
+        } else {
+            y = dirY
+            labelToField = Companion.labelToField
+            decrementY(false)
+        }
+
         val labelStyle = LabelStyle(font, font.color)
         val textFieldStyle = TextFieldStyle(font, font.color, cursor, selection, background)
 
-        label = GLabel(if (isInput) "Input Directory" else "Output Directory", labelStyle, 135f,
-            Companion.y, labelWidth, fieldHeight)
+        label = GLabel(text, labelStyle, 135f, y, labelWidth, fieldHeight)
         textFieldStyle.focusedBackground = focusedBackground
         field = TextField(null, textFieldStyle)
         field.alignment = Align.left
-        field.setPosition(label.x + labelToField, Companion.y)
+        field.setPosition(x + labelToField, y)
         field.setSize(fieldWidth, fieldHeight)
 
         super.addActor(label)
         super.addActor(field)
-
-        if (isInput) {
-            decrementY()
-        }
     }
 
     override fun setX(x: Float) {
