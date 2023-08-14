@@ -10,6 +10,6 @@ abstract class Dependency {
     abstract fun getBytes(): ByteArray
     abstract fun withBytes(whenDone: (ByteArray) -> Unit)
 
-    abstract fun getStream(): GResult<BufferedInputStream, java.io.IOException>
+    abstract fun getBufferedStream(): GResult<BufferedInputStream, java.io.IOException>
     abstract fun withStream(withStream: (GResult<BufferedInputStream, java.io.IOException>) -> Unit)
 }

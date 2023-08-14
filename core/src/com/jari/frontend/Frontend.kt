@@ -18,8 +18,6 @@ import com.badlogic.gdx.scenes.scene2d.ui.Label.LabelStyle
 import com.badlogic.gdx.scenes.scene2d.ui.TextButton.TextButtonStyle
 import com.badlogic.gdx.scenes.scene2d.ui.TextField
 import com.badlogic.gdx.scenes.scene2d.ui.TextField.TextFieldStyle
-import com.badlogic.gdx.scenes.scene2d.ui.TextTooltip
-import com.badlogic.gdx.scenes.scene2d.ui.TextTooltip.TextTooltipStyle
 import com.badlogic.gdx.scenes.scene2d.ui.Window.WindowStyle
 import com.badlogic.gdx.scenes.scene2d.utils.Drawable
 import com.badlogic.gdx.scenes.scene2d.utils.TextureRegionDrawable
@@ -49,7 +47,6 @@ class Frontend : Screen {
     private var isDialogActive = false
 
     private var isOnMain = true
-    private var hasSwitchedMaven = false
 
     private val stage: Stage
 
@@ -192,9 +189,9 @@ class Frontend : Screen {
         mainButtonStyle.over = artist.textureDrawable(5f, 5f, windowColor, "rect", "filled")
         mainButtonStyle.up = mainButtonStyle.over
         mainButtonStyle.font = copyFont(font)
-        mainButtonStyle.fontColor = Color(0.3f, 0.3f, 0.3f, 1f)
+        mainButtonStyle.fontColor = Color(0.4f, 0.4f, 0.4f, 1f)
         mainButtonStyle.checkedFontColor = mainButtonStyle.font.color
-        mainButtonStyle.overFontColor = Color(0.5f, 0.5f, 0.5f, 1f)
+        mainButtonStyle.overFontColor = Color(0.6f, 0.6f, 0.6f, 1f)
 
         val mainButton = GTextButton("Main", mainButtonStyle)
         mainButton.size = Vector2(jarButton.size)
@@ -206,9 +203,9 @@ class Frontend : Screen {
         mavenButtonStyle.over = mainButtonStyle.over
         mavenButtonStyle.up = mainButtonStyle.over
         mavenButtonStyle.font = copyFont(font)
-        mavenButtonStyle.fontColor = Color(0.3f, 0.3f, 0.3f, 1f)
+        mavenButtonStyle.fontColor = Color(mainButtonStyle.fontColor)
         mavenButtonStyle.checkedFontColor = mavenButtonStyle.font.color
-        mavenButtonStyle.overFontColor = Color(0.5f, 0.5f, 0.5f, 1f)
+        mavenButtonStyle.overFontColor = Color(mainButtonStyle.overFontColor)
 
         val mavenButton = GTextButton("Maven", mavenButtonStyle)
         mavenButton.size = Vector2(mainButton.size)
@@ -260,6 +257,8 @@ class Frontend : Screen {
                     dep.second.isVisible = false
                     dep.second.isDisabled = true
                 }
+            } else {
+                mainButton.toggle()
             }
         }
 
@@ -295,6 +294,8 @@ class Frontend : Screen {
                     dep.second.isVisible = true
                     dep.second.isDisabled = false
                 }
+            } else {
+                mavenButton.toggle()
             }
         }
 
@@ -307,6 +308,7 @@ class Frontend : Screen {
 
         stage.addActor(manifestLabel)
         stage.addActor(manifestField)
+
         stage.addActor(jarVersion)
 
         stage.addActor(compressionLabel)
@@ -348,10 +350,20 @@ class Frontend : Screen {
         dialog.buttonTable.getCell(dialogClose).padBottom(10f)
 
         jarButton.onClick {
-            val inputDirs = Array(directories.size) { directories[it].field.text }
-            val dependencies = Array(dependencies.size) { Pair(dependencies[it].first.field.text, dependencies[it].second.text) }
+            val filteredInput = this.directories.copy().filter { it.field.text.isNotBlank() }
 
-            backend.jarIt(inputDirs, outDir.field.text, dependencies, manifestField.text, jarVersion.text, !compressionCheckbox.isChecked)
+            val input = if (filteredInput.size == 0) {
+                arrayOf(this.directories[0].field.text)
+            } else {
+                Array(filteredInput.size) { filteredInput[it].field.text }
+            }
+
+            val filteredDependencies = this.dependencies.copy().filter { it.first.field.text.isNotBlank() }
+            val dependencies = Array(filteredDependencies.size) {
+                Pair(filteredDependencies[it].first.field.text, filteredDependencies[it].second.text)
+            }
+
+            backend.jarIt(input, outDir.field.text, dependencies, manifestField.text, jarVersion.text, !compressionCheckbox.isChecked)
             showDialog = true
         }
 
@@ -370,32 +382,34 @@ class Frontend : Screen {
                     dialogLabel.setText("Input Jarred!")
                 } else {
                     var text = ""
-
                     val errors = backend.errors
 
-                    synchronized(errors) {
-                        val lastIndex = errors.size - 1
+                    val lastIndex = errors.size - 1
 
-                        for (i in 0..lastIndex) {
-                            if (i == lastIndex) {
-                                text += errors[i].toString()
-                                break
-                            }
-
-                            text += "${errors[i]}${System.lineSeparator()}"
+                    for (i in 0..lastIndex) {
+                        if (i == lastIndex) {
+                            text += errors[i].toString()
+                            break
                         }
+
+                        text += "${errors[i]}${System.lineSeparator()}"
                     }
 
                     dialogLabel.setText(text)
-                    backend.clear()
                 }
-            } else {
-                dialogLabel.setText("Jarring...")
-            }
 
-            if (!isDialogActive) {
-                dialog.show(stage)
+                backend.reset()
+
+                if (!isDialogActive) {
+                    isDialogActive = true
+                    dialog.show(stage, Actions.fadeIn(0.3f))
+                    dialog.setPosition(Math.round((stage.width - dialog.width) / 2).toFloat(), Math.round((stage.height - dialog.height) / 2).toFloat())
+                }
+            } else if (!isDialogActive) {
                 isDialogActive = true
+                dialogLabel.setText("Jarring...")
+                dialog.show(stage, Actions.fadeIn(0.3f))
+                dialog.setPosition(Math.round((stage.width - dialog.width) / 2).toFloat(), Math.round((stage.height - dialog.height) / 2).toFloat())
             }
         }
 
