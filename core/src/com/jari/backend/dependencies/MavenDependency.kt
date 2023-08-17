@@ -1,6 +1,6 @@
 package com.jari.backend.dependencies
 
-import geo.utils.GResult
+import com.jari.backend.JResult
 import java.io.BufferedInputStream
 import java.io.IOException
 import java.net.URL
@@ -18,16 +18,16 @@ class MavenDependency(internal val args: Array<String>) : Dependency() {
         whenDone.invoke(getBytes())
     }
 
-    override fun getBufferedStream(): GResult<BufferedInputStream, IOException> {
+    override fun getBufferedStream(): JResult<BufferedInputStream, IOException> {
         return try {
             val stream = BufferedInputStream(getFullUrl(args).openStream())
-            GResult.ok(stream)
+            JResult.ok(stream)
         } catch (e: IOException) {
-            GResult.err(e)
+            JResult.err(e)
         }
     }
 
-    override fun withStream(withStream: (GResult<BufferedInputStream, IOException>) -> Unit) {
+    override fun withStream(withStream: (JResult<BufferedInputStream, IOException>) -> Unit) {
         withStream.invoke(getBufferedStream())
     }
 

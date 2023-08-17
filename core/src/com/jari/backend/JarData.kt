@@ -6,7 +6,7 @@ import com.jari.backend.dependencies.MavenDependency
 import com.jari.backend.errors.DataError
 import com.jari.backend.errors.IOError
 import com.jari.backend.errors.NaNError
-import geo.utils.GResult
+import com.jari.backend.JResult
 import java.io.File
 import java.nio.file.Files
 import java.nio.file.Path
@@ -119,12 +119,12 @@ internal class JarData internal constructor(input: Array<String>, output: String
     }
 
     private fun validateInput(input: Array<String>): Array<FsObj>? {
-        val inputObjs: Array<GResult<FsObj, DataError>> = Array(input.size) {
+        val inputObjs: Array<JResult<FsObj, DataError>> = Array(input.size) {
             try {
                 val sanitized = sanitize(input[it])
-                GResult.ok(FsObj(sanitized))
+                JResult.ok(FsObj(sanitized))
             } catch (e: java.lang.Exception) {
-                GResult.err(IOError(input[it], ErrorState.Exception, "Input Directory"))
+                JResult.err(IOError(input[it], ErrorState.Exception, "Input Directory"))
             }
         }
 
@@ -148,10 +148,10 @@ internal class JarData internal constructor(input: Array<String>, output: String
     }
 
     private fun validateOutput(output: String): FsObj? {
-        val outputResult: GResult<FsObj, DataError> = try {
-            GResult.ok(FsObj(sanitize(output)))
+        val outputResult: JResult<FsObj, DataError> = try {
+            JResult.ok(FsObj(sanitize(output)))
         } catch (e: java.lang.Exception) {
-            GResult.err(IOError(output, ErrorState.Exception, "Output Directory"))
+            JResult.err(IOError(output, ErrorState.Exception, "Output Directory"))
         }
 
         return if (outputResult.isOk) {
@@ -200,10 +200,10 @@ internal class JarData internal constructor(input: Array<String>, output: String
             return FsObj("")
         }
 
-        val mainClasspath: GResult<FsObj, DataError> = try {
-            GResult.ok(FsObj(mainClasspathString))
+        val mainClasspath: JResult<FsObj, DataError> = try {
+            JResult.ok(FsObj(mainClasspathString))
         } catch (e: java.lang.Exception) {
-            GResult.err(IOError(mainClasspath, ErrorState.Exception, "Main Class-Path"))
+            JResult.err(IOError(mainClasspath, ErrorState.Exception, "Main Class-Path"))
         }
 
         return if (mainClasspath.isOk) {

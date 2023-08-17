@@ -2,12 +2,12 @@ package com.jari.backend
 
 import com.jari.backend.dependencies.Dependency
 import com.jari.backend.dependencies.DependencyHandler
+import com.jari.backend.dsl.DSLParser
 import com.jari.backend.errors.DataError
 import com.jari.backend.errors.IOError
 import com.jari.backend.errors.JarError
-import geo.files.FileHandler
-import geo.utils.GResult
 import java.io.File
+import java.io.IOException
 import java.nio.file.Files
 import java.nio.file.Path
 import java.nio.file.Paths
@@ -71,13 +71,13 @@ class Backend {
     val errors: MutableList<DataError> get() = errorsAtomic.get()
 
     private companion object {
-        private fun invokeJar(startDirectory: File, input: MutableList<String>, output: String, useCompression: Boolean): GResult<Process, DataError> {
+        private fun invokeJar(startDirectory: File, input: MutableList<String>, output: String, useCompression: Boolean): JResult<Process, DataError> {
             // TODO: INTRODUCE MORE ERROR HANDLING HERE
 
             val jar = try {
                 "${System.getenv("JAVA_HOME")}${File.separatorChar}bin${File.separatorChar}jar.exe"
             } catch (e: java.lang.Exception) {
-                return GResult.err(IOError("JAVA_HOME", ErrorState.Exception, "unable to find jar executable within JAVA_HOME"))
+                return JResult.err(IOError("JAVA_HOME", ErrorState.Exception, "unable to find jar executable within JAVA_HOME"))
             }
 
             val list = ArrayList<String>(input.size + 4)
@@ -91,9 +91,9 @@ class Backend {
             list.addAll(Array(input.size) { "\"${input[it]}\"" })
 
             return try {
-                GResult.ok(ProcessBuilder(list).redirectErrorStream(true).directory(startDirectory).start())
+                JResult.ok(ProcessBuilder(list).redirectErrorStream(true).directory(startDirectory).start())
             } catch (e: java.lang.Exception) {
-                GResult.err(IOError(e.message, ErrorState.Exception, "Jar"))
+                JResult.err(IOError(e.message, ErrorState.Exception, "Jar"))
             }
         }
 
@@ -107,11 +107,38 @@ class Backend {
             Files.write(Paths.get("${dir}MANIFEST.txt"), manifestContent.toByteArray())
         }
 
-        private fun cleanUp(dir: Path) = FileHandler.recursivelyDelete(dir)
+        private fun recursivelyDelete(dir: Path?) {
+            try {
+                if (Files.isDirectory(dir)) {
+                    Files.newDirectoryStream(dir).use { stream ->
+                        for (fsObj in stream) {
+                            recursivelyDelete(fsObj)
+                        }
+                    }
+                }
+                Files.delete(dir)
+            } catch (e: IOException) {
+                println(e.message)
+            }
+        }
+    }
+
+    fun jarIt(file: File) {
+        val jarDataResult = DSLParser.parse(file)
+
+        if (jarDataResult.isOk) {
+            jarIt(jarDataResult.unwrap())
+        } else {
+            errors.addAll(jarDataResult.unwrapErr())
+        }
     }
 
     fun jarIt(input: Array<String>, output: String, dependencies: Array<Pair<String, String>>, mainClass: String, version: String, useCompression: Boolean) {
-        val isJarDataSuccess = validateJarData(JarData(input, output, dependencies, mainClass, version, useCompression))
+        jarIt(JarData(input, output, dependencies, mainClass, version, useCompression))
+    }
+
+    private fun jarIt(jarData: JarData) {
+        val isJarDataSuccess = validateJarData(jarData)
 
         println(isOkAtomic.get())
 
@@ -158,7 +185,7 @@ class Backend {
                 handleJar(temp.file, jarArgs.get(), jarData.output!!.string, jarData.useCompression)
             }
 
-            cleanUp(temp.path)
+            recursivelyDelete(temp.path)
         }
 
         setRunning(false)
