@@ -7,7 +7,7 @@ internal class Lexer {
     private val chars: MutableList<Char> = ArrayList(5120)
 
     companion object {
-        fun lex(string: String): MutableList<Token> = Lexer().tokenize(string)
+        inline fun lex(string: String): MutableList<Token> = Lexer().tokenize(string)
 
         private inline fun getTokenType(char: String): Token.Type {
             if (char.isBlank()) {
@@ -18,7 +18,7 @@ internal class Lexer {
                 "{" -> LeftBrace
                 "}" -> RightBrace
                 "=" -> Equals
-                "\"" -> Quote
+                "\"", "'" -> Quote
                 else -> Value
             }
         }
@@ -43,10 +43,8 @@ internal class Lexer {
                 Value -> {
                     val string = charString + eatWhile {
                         val type = getTokenType(it.toString())
-                        type != Break && type != Equals && type != LeftBrace && type != RightBrace
+                        type != Break && type != Equals && type != LeftBrace && type != RightBrace && type != Quote
                     }
-
-                    println("String: $string")
 
                     tokens.add(Token(Value, string, lineNumber))
                 }
@@ -57,12 +55,22 @@ internal class Lexer {
     }
 
     private fun eatWhile(condition: (Char) -> Boolean): String {
+        if (chars.isEmpty()) {
+            return ""
+        }
+
         var string = ""
         var char = eat()
 
         while (chars.isNotEmpty() && condition.invoke(char)) {
             string += char
             char = eat()
+
+            if (chars.isEmpty()) {
+                if (condition.invoke(char)) {
+                    string += char
+                }
+            }
         }
 
         return string

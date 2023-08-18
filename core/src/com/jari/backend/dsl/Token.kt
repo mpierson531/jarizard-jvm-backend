@@ -1,6 +1,6 @@
 package com.jari.backend.dsl
 
-data class Token(val type: Token.Type, val value: String, val lineNumber: Int) {
+internal data class Token(val type: Type, val value: String, val lineNumber: Int) {
     enum class Type {
         Equals,
         LeftBrace,
@@ -9,26 +9,13 @@ data class Token(val type: Token.Type, val value: String, val lineNumber: Int) {
         Break,
         Value;
 
-        fun toRawValue(): String = when (this) {
-            Equals -> "'='"
-            LeftBrace -> "'{'"
-            RightBrace -> "'}'"
-            Quote -> "'\"'"
-            else -> this.toString()
-        }
-
-        fun isRaw(): Boolean = when (this) {
-            Equals, LeftBrace, RightBrace, Quote -> true
-            else -> false
-        }
-
         override fun toString(): String = when (this) {
-            Equals -> "equals"
-            LeftBrace -> "left-brace"
-            RightBrace -> "right-brace"
-            Quote -> "quotes"
-            Break -> "break"
-            Value -> "value"
+            Equals -> "\"=\""
+            LeftBrace -> "\"{\""
+            RightBrace -> "\"}\""
+            Quote -> "'\"'"
+            Break -> "'*break*' (whitespace)"
+            Value -> "'*value*'"
         }
     }
 

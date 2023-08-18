@@ -10,6 +10,7 @@ import java.io.File
 internal class DSLParser(private val tokens: MutableList<Token>) {
     private var isOk: Boolean = false
     private var lineNumber: Int = tokens[0].lineNumber
+    private val errors: MutableList<DataError> = ArrayList(4)
 
     private enum class DSLType {
         Input,
@@ -106,12 +107,12 @@ internal class DSLParser(private val tokens: MutableList<Token>) {
         }
 
         val dependencyFunction: () -> Unit = {
-            val leftBrace = eatIf { it.type == Type.LeftBrace }
+            val leftBrace = eatIf { !isEmpty() && it.type == Type.LeftBrace }
 
             val rawDependencies = parseWhile(Dependency, parseWhileCondition).toMutableList()
 
             if (leftBrace.first) {
-                eatExpectantly(errors, Type.RightBrace)
+                eatExpectantly(Type.RightBrace)
             }
 
             while (rawDependencies.isNotEmpty()) {
@@ -125,51 +126,40 @@ internal class DSLParser(private val tokens: MutableList<Token>) {
         }
 
         while (tokens.isNotEmpty()) {
-            val token = eat()
+            val token = eatExpectantly(Type.Value)!!
 
-            when (token.type) {
-                Type.Value -> {
-                    if (isInput(token)) {
-                        val leftBrace = eatIf { it.type == Type.LeftBrace }
+            if (isInput(token)) {
+                val leftBrace = eatIf { !isEmpty() && it.type == Type.LeftBrace }
 
-                        input.addAll(parseWhile(Input, parseWhileCondition))
+                input.addAll(parseWhile(Input, parseWhileCondition))
 
-                        if (leftBrace.first) {
-                            eatExpectantly(errors, Type.RightBrace)
-                        }
-                    } else if (isOutput(token)) {
-                        output = parseWhile(Output, parseWhileCondition)[0]
-                    } else if (isMainClass(token)) {
-                        mainClass = parseWhile(MainClass, parseWhileCondition)[0]
-                    } else if (isCompression(token)) {
-                        val next = eat()
+                if (leftBrace.first) {
+                    eatExpectantly(Type.RightBrace)
+                }
+            } else if (isOutput(token)) {
+                output = parseWhile(Output, parseWhileCondition)[0]
+            } else if (isMainClass(token)) {
+                mainClass = parseWhile(MainClass, parseWhileCondition)[0]
+            } else if (isCompression(token)) {
+                val next = eatExpectantly(Type.Value)
 
-                        if (next.value == "false" || next.value == "0") {
-                            useCompression = false
-                        }
-                    } else if (isDependency(token)) {
-                        dependencyFunction.invoke()
-                    } else if (isVersion(token)) {
-                        version = parseWhile(Version, parseWhileCondition)[0]
-                    } else {
-                        if (isOk) {
-                            isOk = false
-                        }
-
-                        errors.add(UnexpectedValueErr(token.value, token.lineNumber))
+                if (next != null) {
+                    if (next.value == "false" || next.value == "0") {
+                        useCompression = false
                     }
                 }
-                else -> {
-                    if (isOk) {
-                        isOk = false
-                    }
-
-                    errors.add(UnexpectedValueErr(token.value, token.lineNumber))
+            } else if (isDependency(token)) {
+                dependencyFunction.invoke()
+            } else if (isVersion(token)) {
+                version = parseWhile(Version, parseWhileCondition)[0]
+            } else {
+                if (isOk) {
+                    isOk = false
                 }
+
+                errors.add(ExpectedValueErr("unknown keyword or value ${token.value}", token.lineNumber, "keyword"))
             }
         }
-
-        println("useCompression = $useCompression")
 
         if (!isOk) {
             return JResult.err(errors.toTypedArray())
@@ -186,28 +176,22 @@ internal class DSLParser(private val tokens: MutableList<Token>) {
         }
     }
 
-    private fun eatExpectantly(errors: MutableList<DataError>, expectedType: Type): Boolean {
+    private fun eatExpectantly(expectedType: Type): Token? {
         return if (isEmpty()) {
             isOk = false
             lineNumber++
 
-            val error = if (expectedType.isRaw()) {
-                ExpectedRawErr("'EOF'", expectedType, lineNumber)
-            } else {
-                ExpectedValueErr("'EOF'", expectedType.toRawValue(), expectedType.toString(), lineNumber)
-            }
-
-            errors.add(error)
+            errors.add(ExpectedValueErr("\"EOF\"", lineNumber, expectedType.toString()))
+            null
         } else {
             val next = eat()
 
             if (next.type != expectedType) {
                 isOk = false
-                errors.add(ExpectedValueErr(next.value, expectedType.toString(), expectedType.toString(), next.lineNumber))
-                false
-            } else {
-                true
+                errors.add(ExpectedValueErr("\"${next.value}\"", next.lineNumber, expectedType.toString()))
             }
+
+            next
         }
     }
 
@@ -226,7 +210,7 @@ internal class DSLParser(private val tokens: MutableList<Token>) {
                 eat()
                 token = peek()
             } else {
-                eat()
+                eatExpectantly(Type.Value)
             }
 
             if (token.type == Type.LeftBrace) {
@@ -255,5 +239,4 @@ internal class DSLParser(private val tokens: MutableList<Token>) {
     private inline fun peek(): Token = tokens[0]
 
     private inline fun isEmpty(): Boolean = tokens.isEmpty()
-    private inline fun isNotEmpty(): Boolean = tokens.isNotEmpty()
 }

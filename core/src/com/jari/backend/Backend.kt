@@ -5,7 +5,6 @@ import com.jari.backend.dependencies.DependencyHandler
 import com.jari.backend.dsl.DSLParser
 import com.jari.backend.errors.DataError
 import com.jari.backend.errors.IOError
-import com.jari.backend.errors.JarError
 import java.io.File
 import java.io.IOException
 import java.nio.file.Files
@@ -13,6 +12,7 @@ import java.nio.file.Path
 import java.nio.file.Paths
 import java.util.concurrent.atomic.AtomicBoolean
 import java.util.concurrent.atomic.AtomicReference
+import javax.xml.crypto.Data
 import kotlin.concurrent.thread
 import kotlin.io.path.name
 
@@ -107,7 +107,7 @@ class Backend {
             Files.write(Paths.get("${dir}MANIFEST.txt"), manifestContent.toByteArray())
         }
 
-        private fun recursivelyDelete(dir: Path?) {
+        private fun recursivelyDelete(dir: Path) {
             try {
                 if (Files.isDirectory(dir)) {
                     Files.newDirectoryStream(dir).use { stream ->
@@ -139,10 +139,6 @@ class Backend {
 
     private fun jarIt(jarData: JarData) {
         val isJarDataSuccess = validateJarData(jarData)
-
-        println(isOkAtomic.get())
-
-        println("before check success")
 
         if (isRunningAtomic.get()) {
             return
@@ -269,7 +265,7 @@ class Backend {
 
             if (unwrappedProcess.exitValue() != 0) {
                 setIsOk(false)
-                addError(JarError(String(unwrappedProcess.inputStream.readAllBytes())))
+                addError(object : DataError() { override val value: String = String(unwrappedProcess.inputStream.readAllBytes()) })
             }
         } else {
             setIsOk(false)
@@ -279,11 +275,9 @@ class Backend {
 
     private fun validateJarData(jarData: JarData): Boolean {
         if (jarData.isOk) {
-            println("jar data is ok")
             jarDataAtomic.get().add(jarData)
             return true
         } else {
-            println("jar data is not ok")
             setIsOk(false)
             errorsAtomic.get().addAll(jarData.errors)
             return false
