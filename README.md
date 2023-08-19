@@ -2,6 +2,8 @@
 
 Download: https://ln5.sync.com/dl/725e306f0/tkd7skej-6e7avynd-qvf7df4m-ri95wbp3
 
+This is fully capable of interop with Java and Kotlin. As far as I know, it can be used in any JVM language.
+
 ## What it is
 A library that creates jar files using the jar executable included in the JDK.
 
