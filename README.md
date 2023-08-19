@@ -1,6 +1,6 @@
 # jarizard-jvm-backend
 
-Download: https://ln5.sync.com/dl/da80848f0/793f5wf4-c7zgkua3-h52ybxv8-mrgnvjwt
+Download: https://ln5.sync.com/dl/342dce5e0/h2sy6f7r-mvd7yqt5-hkp6udy4-pkxy5kqy
 
 This is fully capable of interop with Java and Kotlin. As far as I know, it can be used in any JVM language.
 
