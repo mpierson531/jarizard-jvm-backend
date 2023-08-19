@@ -65,9 +65,19 @@ class Backend {
     private var jarDataAtomic: AtomicReference<MutableList<JarData>> = AtomicReference(ArrayList())
     private var errorsAtomic: AtomicReference<MutableList<DataError>> = AtomicReference(ArrayList())
 
+    /**
+     * Says whether or not ```this``` is done jarring the input.
+     */
     val isDone: Boolean get() = !isRunningAtomic.get()
+
+    /**
+     * Says whether or not there were any errors.
+     */
     val isOk: Boolean get() = isOkAtomic.get()
 
+    /**
+     * List of errors. This may be empty.
+     */
     val errors: MutableList<DataError> get() = errorsAtomic.get()
 
     private companion object {
@@ -123,6 +133,9 @@ class Backend {
         }
     }
 
+    /**
+     * @param file The file containing the DSL code. Do not call this if not using the DSL.
+     */
     fun jarIt(file: File) {
         val jarDataResult = DSLParser.parse(file)
 
@@ -133,6 +146,15 @@ class Backend {
         }
     }
 
+    /**
+     * If not using the DSL, this is most likely what you should call.
+     * @param input Input files or directories
+     * @param output File path for the resulting jar file
+     * @param dependencies Array of dependency pairs (path and version), if any. This may be empty.
+     * @param mainClass Optional main-class path. Required if your jar should be an executable jar.
+     * @param version Version used in the manifest. If the string is empty, a version of '1.0' will be used.
+     * @param useCompression Determines whether or not the jar file will be compressed.
+     */
     fun jarIt(input: Array<String>, output: String, dependencies: Array<Pair<String, String>>, mainClass: String, version: String, useCompression: Boolean) {
         jarIt(JarData(input, output, dependencies, mainClass, version, useCompression))
     }
@@ -289,6 +311,9 @@ class Backend {
     private fun setRunning(isRunning: Boolean) = isRunningAtomic.set(isRunning)
     private fun setIsOk(isOk: Boolean) = isOkAtomic.set(isOk)
 
+    /**
+     * Clears any errors and jar data. Should be used if ```this.jarIt``` will be called multiple times.
+     */
     fun reset() {
         errorsAtomic.get().clear()
         jarDataAtomic.get().clear()

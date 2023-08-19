@@ -2,6 +2,9 @@ package com.jari.backend;
 
 import java.io.File;
 
+/**
+ * Test class
+ */
 public class Main {
     public static void main(String[] args) {
         var backend = new Backend();
