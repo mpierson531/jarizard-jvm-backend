@@ -1,6 +1,6 @@
 # jarizard-jvm-backend
 
-Download: https://ln5.sync.com/dl/342dce5e0/h2sy6f7r-mvd7yqt5-hkp6udy4-pkxy5kqy
+Download: https://ln5.sync.com/dl/2dca9a120/fihaabv7-5xyfruxd-rk6shfaq-uvfanupw
 
 This is fully capable of interop with Java and Kotlin. As far as I know, it can be used in any JVM language.
 
@@ -63,5 +63,5 @@ Paths like this can easily be directly translated into Maven URLs, which is why 
 ## Notes
 As of right now, file paths are assumed to be absolute.
 
-It is also assumed that the system this is run on has the ```JAVA_HOME``` environment variable set.
+~~It is also assumed that the system this is run on has the ```JAVA_HOME``` environment variable set.~~
 

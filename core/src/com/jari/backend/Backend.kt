@@ -15,6 +15,7 @@ import java.util.concurrent.atomic.AtomicReference
 import javax.xml.crypto.Data
 import kotlin.concurrent.thread
 import kotlin.io.path.name
+import kotlin.system.exitProcess
 
 internal fun splitDir(dir: String, isDependency: Boolean): Array<String> {
     var i = 0
@@ -81,23 +82,14 @@ class Backend {
     val errors: MutableList<DataError> get() = errorsAtomic.get()
 
     private companion object {
+        private val jarPath = "${System.getProperty("java.home")}${File.separatorChar}bin${File.separatorChar}jar"
+
         private fun invokeJar(startDirectory: File, input: MutableList<String>, output: String, useCompression: Boolean): JResult<Process, DataError> {
-            // TODO: INTRODUCE MORE ERROR HANDLING HERE
+            val list = ArrayList<String>(input.size + 5)
 
-            val jar = try {
-                "${System.getenv("JAVA_HOME")}${File.separatorChar}bin${File.separatorChar}jar.exe"
-            } catch (e: java.lang.Exception) {
-                return JResult.err(IOError("JAVA_HOME", ErrorState.Exception, "unable to find jar executable within JAVA_HOME"))
-            }
+            val jarMode = if (!useCompression) "cfm0" else "cfm"
 
-            val list = ArrayList<String>(input.size + 4)
-
-            if (!useCompression) {
-                list.addAll(arrayOf(jar, "cfm0", "\"$output\"", "MANIFEST.txt"))
-            } else {
-                list.addAll(arrayOf(jar, "cfm", "\"$output\"", "MANIFEST.txt"))
-            }
-
+            list.addAll(arrayOf(jarPath, jarMode, "\"$output\"", "MANIFEST.txt"))
             list.addAll(Array(input.size) { "\"${input[it]}\"" })
 
             return try {
@@ -109,9 +101,9 @@ class Backend {
 
         private fun writeManifest(dir: String, mainClass: String?, version: Float?) {
             val manifestContent = if (mainClass == null) {
-                "Manifest-Version: ${version ?: 1.0f.toString()}${System.lineSeparator()}"
+                "Manifest-Version: ${version ?: 1.0f}${System.lineSeparator()}"
             } else {
-                "Manifest-Version: ${version ?: 1.0f.toString()}${System.lineSeparator()}Main-Class: $mainClass${System.lineSeparator()}"
+                "Manifest-Version: ${version ?: 1.0f}${System.lineSeparator()}Main-Class: $mainClass${System.lineSeparator()}"
             }
 
             Files.write(Paths.get("${dir}MANIFEST.txt"), manifestContent.toByteArray())
@@ -121,11 +113,10 @@ class Backend {
             try {
                 if (Files.isDirectory(dir)) {
                     Files.newDirectoryStream(dir).use { stream ->
-                        for (fsObj in stream) {
-                            recursivelyDelete(fsObj)
-                        }
+                        stream.forEach(Companion::recursivelyDelete)
                     }
                 }
+
                 Files.delete(dir)
             } catch (e: IOException) {
                 println(e.message)
