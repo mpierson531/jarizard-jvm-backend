@@ -8,8 +8,8 @@ abstract class Dependency {
     abstract val version: String
 
     abstract fun getBytes(): ByteArray
-    abstract fun withBytes(whenDone: (ByteArray) -> Unit)
+    fun withBytes(whenDone: (ByteArray) -> Unit) = whenDone.invoke(getBytes())
 
     abstract fun getBufferedStream(): JResult<BufferedInputStream, java.io.IOException>
-    abstract fun withStream(withStream: (JResult<BufferedInputStream, java.io.IOException>) -> Unit)
+    fun withStream(withStream: (JResult<BufferedInputStream, java.io.IOException>) -> Unit) = withStream.invoke(getBufferedStream())
 }
