@@ -6,15 +6,14 @@ import com.jari.backend.dependencies.MavenDependency
 import com.jari.backend.errors.DataError
 import com.jari.backend.errors.IOError
 import com.jari.backend.errors.NaNError
-import com.jari.backend.JResult
 import java.io.File
 import java.nio.file.Files
 import java.nio.file.Path
 
 internal class JarData internal constructor(input: Array<String>, output: String,
-                                   dependencies: Array<Pair<String, String>>,
-                                   mainClasspath: String, version: String,
-                                   useCompression: Boolean) {
+                       dependencies: Array<Pair<String, String>>,
+                       mainClasspath: String, version: String,
+                       useCompression: Boolean) {
     companion object {
         private fun sanitize(dir: String): String {
             val split = splitDir(dir.trim(), false)

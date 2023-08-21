@@ -5,8 +5,7 @@ import java.nio.file.Files
 import java.nio.file.Path
 import java.nio.file.Paths
 
-internal class FsObj(val string: String, val path: Path, val file: File) {
-    constructor(pathString: String) : this(pathString, Paths.get(pathString), File(pathString))
+internal class FsObj @JvmOverloads constructor (val string: String, val path: Path = Paths.get(string), val file: File = path.toFile()) {
     constructor(path: Path) : this(path.toString(), path, path.toFile())
 
     override fun toString(): String = string
