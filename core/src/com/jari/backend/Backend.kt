@@ -12,10 +12,8 @@ import java.nio.file.Path
 import java.nio.file.Paths
 import java.util.concurrent.atomic.AtomicBoolean
 import java.util.concurrent.atomic.AtomicReference
-import javax.xml.crypto.Data
 import kotlin.concurrent.thread
 import kotlin.io.path.name
-import kotlin.system.exitProcess
 
 internal fun splitDir(dir: String, isDependency: Boolean): Array<String> {
     var i = 0
@@ -175,17 +173,29 @@ class Backend {
             val tempRoot = temp.string + File.separatorChar
             val jarData = jarDataAtomic.get().removeAt(0)
             val jarArgs = AtomicReference(mutableListOf<String>())
-            val isDependencyOk = AtomicBoolean(true)
 
-            val dependencyThread =
-                handleDependencies(useDependencyThread, tempRoot, jarData.dependencies, jarArgs, isDependencyOk)
+            val hasDependencies: Boolean
+            val isDependencyOk: AtomicBoolean?
+            val dependencyThread: Thread?
+
+            if (jarData.dependencies.isEmpty()) {
+                hasDependencies = false
+                isDependencyOk = null
+                dependencyThread = null
+            } else {
+                hasDependencies = true
+                isDependencyOk = AtomicBoolean(true)
+                dependencyThread = handleDependencies(useDependencyThread, tempRoot, jarData.dependencies, jarArgs, isDependencyOk)
+            }
 
             copyAndAddInput(tempRoot, jarData.input!!, jarArgs)
 
-            dependencyThread?.join()
+            if (hasDependencies) {
+                dependencyThread!!.join()
 
-            if (!isDependencyOk.get()) {
-                setIsOk(false)
+                if (!isDependencyOk!!.get()) {
+                    setIsOk(false)
+                }
             }
 
             if (isOk) {
@@ -287,13 +297,13 @@ class Backend {
     }
 
     private fun validateJarData(jarData: JarData): Boolean {
-        if (jarData.isOk) {
+        return if (jarData.isOk) {
             jarDataAtomic.get().add(jarData)
-            return true
+            true
         } else {
             setIsOk(false)
             errorsAtomic.get().addAll(jarData.errors)
-            return false
+            false
         }
     }
 
